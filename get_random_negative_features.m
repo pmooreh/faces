@@ -35,5 +35,21 @@ function features_neg = get_random_negative_features(non_face_scn_path, feature_
 image_files = dir( fullfile( non_face_scn_path, '*.jpg' ));
 num_images = length(image_files);
 
-% placeholder to be deleted
-features_neg = rand(100, (feature_params.template_size / feature_params.hog_cell_size)^2 * 31);
+features_neg = zeros(num_images,...
+    (feature_params.template_size / feature_params.hog_cell_size)^2 * 31);
+
+for i = 1:num_samples
+    r = randi(num_images);
+    rand_img = im2single(rgb2gray(imread([image_files(r).folder '/' image_files(r).name])));
+    patch = imresize(random_box(rand_img),...
+        [feature_params.template_size, feature_params.template_size]);
+    hog = vl_hog(patch, feature_params.hog_cell_size);
+    
+    subplot(1,2,1);
+    imshow(patch);
+    subplot(1,2,2);
+    imshow(vl_hog('render', hog));
+    waitforbuttonpress;
+    
+    features_neg(i,:) = reshape(hog, 1, []);
+end
