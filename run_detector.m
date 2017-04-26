@@ -57,11 +57,50 @@ for i = 1:length(test_scenes)
     
     %You can delete all of this below.
     % Let's create 15 random detections per image
-    cur_x_min = rand(15,1) * size(img,2);
-    cur_y_min = rand(15,1) * size(img,1);
-    cur_bboxes = [cur_x_min, cur_y_min, cur_x_min + rand(15,1) * 50, cur_y_min + rand(15,1) * 50];
-    cur_confidences = rand(15,1) * 4 - 2; %confidences in the range [-2 2]
+    cur_bboxes = [];
+    cur_confidences = []; %confidences in the range [-2 2]
     cur_image_ids(1:15,1) = {test_scenes(i).name};
+    
+    % sliding window
+    scales = [1.0];
+    step_size = 6;
+    for s = 1:numel(scales)
+        scaled_im = imresize(img, scales(s));
+        scaled_im_sz = size(scaled_im);
+        num_steps = floor(scaled_im_sz / step_size);
+        for x_step = 0:num_steps(2)-1
+            for y_step = 0:num_steps(1)-1
+                x_start = x_step * step_size;
+                y_start = y_step * step_size;
+                x_end = x_start + feature_params.template_size;
+                y_end = y_start + feature_params.template_size;
+                if (x_end > scaled_im_sz(2) || y_end > scaled_im_sz(1))
+                    break
+                end
+                bbox = [x_start+1 , x_end , y_start+1 , y_end];
+                window = scaled_im(y_start+1:y_end, x_start+1:x_end);
+                hog = vl_hog(window, feature_params.hog_cell_size);
+                score = w'*reshape(hog, [], 1) + b;
+
+                if score > 0
+%                     subplot(1,2,1);
+%                     imshow(window);
+%                     subplot(1,2,2);
+%                     imshow(vl_hog('render', hog));
+%                     title(num2str(score));
+%                     waitforbuttonpress;
+%                     close all;
+                end
+                
+                if score > 0
+                    cur_bboxes = [curr_bboxes ; bbox];
+                    cur_confidences = [curr_confidences; score];
+                end
+                
+                
+            end
+        end
+    end
     
     %non_max_supr_bbox can actually get somewhat slow with thousands of
     %initial detections. You could pre-filter the detections by confidence,
