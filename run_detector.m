@@ -54,17 +54,19 @@ for i = 1:length(test_scenes)
     if(size(img,3) > 1)
         img = rgb2gray(img);
     end
+    img_size = size(img);
     
     %You can delete all of this below.
     % Let's create 15 random detections per image
-    cur_bboxes = [];
+    cur_im_bboxes = [];
     cur_confidences = []; %confidences in the range [-2 2]
-    cur_image_ids(1:15,1) = {test_scenes(i).name};
+    cur_image_ids = [];
     
     % sliding window
     scales = [1.0];
     step_size = 6;
     for s = 1:numel(scales)
+        cur_scale_bboxes = [];
         scaled_im = imresize(img, scales(s));
         scaled_im_sz = size(scaled_im);
         num_steps = floor(scaled_im_sz / step_size);
@@ -77,7 +79,6 @@ for i = 1:length(test_scenes)
                 if (x_end > scaled_im_sz(2) || y_end > scaled_im_sz(1))
                     break
                 end
-                bbox = [x_start+1 , x_end , y_start+1 , y_end];
                 window = scaled_im(y_start+1:y_end, x_start+1:x_end);
                 hog = vl_hog(window, feature_params.hog_cell_size);
                 score = w'*reshape(hog, [], 1) + b;
@@ -93,28 +94,40 @@ for i = 1:length(test_scenes)
                 end
                 
                 if score > 0
-                    cur_bboxes = [curr_bboxes ; bbox];
-                    cur_confidences = [curr_confidences; score];
+                    bbox = [x_start , y_start , x_end , y_end];
+                    cur_scale_bboxes = [cur_scale_bboxes ; bbox];
+                    cur_confidences = [cur_confidences; score];
+                    cur_image_ids = [cur_image_ids;{test_scenes(i).name}];
                 end
                 
                 
             end
         end
+        cur_scale_bboxes = cur_scale_bboxes ./ scales(s);
+        cur_im_bboxes = [cur_im_bboxes ; cur_scale_bboxes];
     end
     
-    %non_max_supr_bbox can actually get somewhat slow with thousands of
-    %initial detections. You could pre-filter the detections by confidence,
-    %e.g. a detection with confidence -1.1 will probably never be
-    %meaningful. You probably _don't_ want to threshold at 0.0, though. You
-    %can get higher recall with a lower threshold. You don't need to modify
-    %anything in non_max_supr_bbox, but you can.
-    [is_maximum] = non_max_supr_bbox(cur_bboxes, cur_confidences, size(img));
+    if numel(cur_confidences) > 0
+        cur_im_bboxes = cur_im_bboxes + [1 1 0 0];
+        x_out_of_bounds = cur_im_bboxes(:,3) > img_size(2);
+        y_out_of_bounds = cur_im_bboxes(:,4) > img_size(1);
+        cur_im_bboxes(x_out_of_bounds,3) = img_size(2);
+        cur_im_bboxes(y_out_of_bounds,4) = img_size(1);
+    
+        %non_max_supr_bbox can actually get somewhat slow with thousands of
+        %initial detections. You could pre-filter the detections by confidence,
+        %e.g. a detection with confidence -1.1 will probably never be
+        %meaningful. You probably _don't_ want to threshold at 0.0, though. You
+        %can get higher recall with a lower threshold. You don't need to modify
+        %anything in non_max_supr_bbox, but you can.
+        [is_maximum] = non_max_supr_bbox(cur_im_bboxes, cur_confidences, size(img));
 
-    cur_confidences = cur_confidences(is_maximum,:);
-    cur_bboxes      = cur_bboxes(     is_maximum,:);
-    cur_image_ids   = cur_image_ids(  is_maximum,:);
+        cur_confidences = cur_confidences(is_maximum,:);
+        cur_im_bboxes      = cur_im_bboxes(     is_maximum,:);
+        cur_image_ids   = cur_image_ids(  is_maximum,:);
+    end
  
-    bboxes      = [bboxes;      cur_bboxes];
+    bboxes      = [bboxes;      cur_im_bboxes];
     confidences = [confidences; cur_confidences];
     image_ids   = [image_ids;   cur_image_ids];
 end
