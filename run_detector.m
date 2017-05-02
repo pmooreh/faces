@@ -5,7 +5,7 @@
 % wrong). The non-maximum suppression is done on a per-image basis. The
 % starter code includes a call to a provided non-max suppression function.
 function [bboxes, confidences, image_ids] = .... 
-    run_detector(test_scn_path, w, b, feature_params)
+    run_detector(test_scn_path, filter, feature_params_filter, classifiers, feature_params, varargin)
 % 'test_scn_path' is a string. This directory contains images which may or
 %    may not have faces in them. This function should work for the MIT+CMU
 %    test set but also for any other images (e.g. class photos)
@@ -39,6 +39,28 @@ function [bboxes, confidences, image_ids] = ....
 % non-maximum suppression. For your initial debugging, you can operate only
 % at a single scale and you can skip calling non-maximum suppression.
 
+suppress = true;
+step_size = 6;
+scales = [0.8, 1.0, 1.2];
+threshold = 0.5;
+filter_thresh = 0.5;
+for i=1:2:length(varargin)
+   switch varargin{i}
+   case 'suppress'
+     suppress = varargin{i+1};
+   case 'scales'
+     scales = varargin{i+1};
+   case 'step'
+     step_size = varargin{i+1};
+   case 'threshold'
+     threshold = varargin{i+1};
+   case 'filter-threshold'
+     filter_thresh = varargin{i+1};
+   otherwise
+     error(sprintf('%s is not a valid argument name',varargin{i}));
+   end
+end
+
 test_scenes = dir( fullfile( test_scn_path, '*.jpg' ));
 
 %initialize these as empty and incrementally expand them.
@@ -63,8 +85,6 @@ for i = 1:length(test_scenes)
     cur_image_ids = [];
     
     % sliding window
-    scales = [1.0];
-    step_size = 6;
     for s = 1:numel(scales)
         cur_scale_bboxes = [];
         scaled_im = imresize(img, scales(s));
@@ -80,27 +100,30 @@ for i = 1:length(test_scenes)
                     break
                 end
                 window = scaled_im(y_start+1:y_end, x_start+1:x_end);
-                hog = vl_hog(window, feature_params.hog_cell_size);
-                score = w'*reshape(hog, [], 1) + b;
-
-                if score > 0
-%                     subplot(1,2,1);
-%                     imshow(window);
-%                     subplot(1,2,2);
-%                     imshow(vl_hog('render', hog));
-%                     title(num2str(score));
-%                     waitforbuttonpress;
-%                     close all;
+                
+                filter_hog = vl_hog(window, feature_params_filter.hog_cell_size);
+                filter_score = filter.w'*reshape(filter_hog, [], 1) + filter.b;
+                if filter_score > filter_thresh
+                    best_score = -1.0;
+                    for j = 1:length(classifiers)
+                        hog = vl_hog(window, feature_params.hog_cell_size);
+                        score = classifiers{j}.w'*reshape(hog, [], 1) + classifiers{j}.b;
+                        best_score = max(score, best_score);
+        %                   subplot(1,2,1);
+        %                   imshow(window);
+        %                   subplot(1,2,2);
+        %                   imshow(vl_hog('render', hog));
+        %                   title(num2str(score));
+        %                   waitforbuttonpress;
+        %                   close all;
+                    end
+                    if best_score > threshold
+                        bbox = [x_start , y_start , x_end , y_end];
+                        cur_scale_bboxes = [cur_scale_bboxes ; bbox];
+                        cur_confidences = [cur_confidences; best_score];
+                        cur_image_ids = [cur_image_ids;{test_scenes(i).name}];
+                    end
                 end
-                
-                if score > 0
-                    bbox = [x_start , y_start , x_end , y_end];
-                    cur_scale_bboxes = [cur_scale_bboxes ; bbox];
-                    cur_confidences = [cur_confidences; score];
-                    cur_image_ids = [cur_image_ids;{test_scenes(i).name}];
-                end
-                
-                
             end
         end
         cur_scale_bboxes = cur_scale_bboxes ./ scales(s);
@@ -120,11 +143,13 @@ for i = 1:length(test_scenes)
         %meaningful. You probably _don't_ want to threshold at 0.0, though. You
         %can get higher recall with a lower threshold. You don't need to modify
         %anything in non_max_supr_bbox, but you can.
-        [is_maximum] = non_max_supr_bbox(cur_im_bboxes, cur_confidences, size(img));
+        if suppress
+            [is_maximum] = non_max_supr_bbox(cur_im_bboxes, cur_confidences, size(img));
 
-        cur_confidences = cur_confidences(is_maximum,:);
-        cur_im_bboxes      = cur_im_bboxes(     is_maximum,:);
-        cur_image_ids   = cur_image_ids(  is_maximum,:);
+            cur_confidences = cur_confidences(is_maximum,:);
+            cur_im_bboxes      = cur_im_bboxes(     is_maximum,:);
+            cur_image_ids   = cur_image_ids(  is_maximum,:);
+        end
     end
  
     bboxes      = [bboxes;      cur_im_bboxes];
