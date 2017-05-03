@@ -44,12 +44,7 @@ for i = 1:num_samples
     patch = imresize(random_box(rand_img),...
         [feature_params.template_size, feature_params.template_size]);
     hog = vl_hog(patch, feature_params.hog_cell_size);
-    
-%     subplot(1,2,1);
-%     imshow(patch);
-%     subplot(1,2,2);
-%     imshow(vl_hog('render', hog));
-%     waitforbuttonpress;
-    
     features_neg(i,:) = reshape(hog, 1, []);
+end
+
 end

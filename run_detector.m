@@ -5,7 +5,7 @@
 % wrong). The non-maximum suppression is done on a per-image basis. The
 % starter code includes a call to a provided non-max suppression function.
 function [bboxes, confidences, image_ids] = .... 
-    run_detector(test_scn_path, filter, feature_params_filter, classifiers, feature_params, varargin)
+    run_detector(test_scn_path, classifier_tree, template_size, varargin)
 % 'test_scn_path' is a string. This directory contains images which may or
 %    may not have faces in them. This function should work for the MIT+CMU
 %    test set but also for any other images (e.g. class photos)
@@ -43,7 +43,6 @@ suppress = true;
 step_size = 6;
 scales = [0.8, 1.0, 1.2];
 threshold = 0.5;
-filter_thresh = 0.5;
 for i=1:2:length(varargin)
    switch varargin{i}
    case 'suppress'
@@ -54,8 +53,6 @@ for i=1:2:length(varargin)
      step_size = varargin{i+1};
    case 'threshold'
      threshold = varargin{i+1};
-   case 'filter-threshold'
-     filter_thresh = varargin{i+1};
    otherwise
      error(sprintf('%s is not a valid argument name',varargin{i}));
    end
@@ -94,35 +91,19 @@ for i = 1:length(test_scenes)
             for y_step = 0:num_steps(1)-1
                 x_start = x_step * step_size;
                 y_start = y_step * step_size;
-                x_end = x_start + feature_params.template_size;
-                y_end = y_start + feature_params.template_size;
+                x_end = x_start + template_size;
+                y_end = y_start + template_size;
                 if (x_end > scaled_im_sz(2) || y_end > scaled_im_sz(1))
                     break
                 end
                 window = scaled_im(y_start+1:y_end, x_start+1:x_end);
                 
-                filter_hog = vl_hog(window, feature_params_filter.hog_cell_size);
-                filter_score = filter.w'*reshape(filter_hog, [], 1) + filter.b;
-                if filter_score > filter_thresh
-                    best_score = -1.0;
-                    for j = 1:length(classifiers)
-                        hog = vl_hog(window, feature_params.hog_cell_size);
-                        score = classifiers{j}.w'*reshape(hog, [], 1) + classifiers{j}.b;
-                        best_score = max(score, best_score);
-        %                   subplot(1,2,1);
-        %                   imshow(window);
-        %                   subplot(1,2,2);
-        %                   imshow(vl_hog('render', hog));
-        %                   title(num2str(score));
-        %                   waitforbuttonpress;
-        %                   close all;
-                    end
-                    if best_score > threshold
-                        bbox = [x_start , y_start , x_end , y_end];
-                        cur_scale_bboxes = [cur_scale_bboxes ; bbox];
-                        cur_confidences = [cur_confidences; best_score];
-                        cur_image_ids = [cur_image_ids;{test_scenes(i).name}];
-                    end
+                [passed, score] = test_down_tree(window, classifier_tree);
+                if passed
+                    bbox = [x_start , y_start , x_end , y_end];
+                    cur_scale_bboxes = [cur_scale_bboxes ; bbox];
+                    cur_confidences = [cur_confidences; score];
+                    cur_image_ids = [cur_image_ids;{test_scenes(i).name}];
                 end
             end
         end
