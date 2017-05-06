@@ -80,11 +80,13 @@ for i = 1:length(test_scenes)
     cur_im_bboxes = [];
     cur_confidences = []; %confidences in the range [-2 2]
     cur_image_ids = [];
-    
+
+    big_scale = 36/img_size(2);
+    my_scales = big_scale * scales;
     % sliding window
-    for s = 1:numel(scales)
+    for s = 1:numel(my_scales)
         cur_scale_bboxes = [];
-        scaled_im = imresize(img, scales(s));
+        scaled_im = imresize(img, my_scales(s));
         scaled_im_sz = size(scaled_im);
         num_steps = floor(scaled_im_sz / step_size);
         for x_step = 0:num_steps(2)-1
@@ -107,7 +109,7 @@ for i = 1:length(test_scenes)
                 end
             end
         end
-        cur_scale_bboxes = cur_scale_bboxes ./ scales(s);
+        cur_scale_bboxes = cur_scale_bboxes ./ my_scales(s);
         cur_im_bboxes = [cur_im_bboxes ; cur_scale_bboxes];
     end
     

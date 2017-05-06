@@ -1,7 +1,7 @@
 function [ passed, score ] = test_down_tree( window, classifier_tree )
 
 if isempty(classifier_tree)
-    score = 0;
+    score = -1;
     passed = true;
 else
     cell_size = classifier_tree{3};
@@ -18,7 +18,7 @@ else
             [p, s] = test_down_tree(window, classifier_tree{1}{i});
             if p
                 passed = p;
-                score = s * score;
+                score = max(s,score);
                 return
             end
         end

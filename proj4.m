@@ -48,7 +48,7 @@ train_path_pos_sides = fullfile(data_path,'MIT-CBCL-facerec-database/side-views'
 
 non_face_scn_path = fullfile(data_path, 'train_non_face_scenes'); %We can mine random or hard negatives from here
 test_scn_path = fullfile(data_path,'test_scenes/test_jpg'); %CMU+MIT test scenes
-% test_scn_path = fullfile(data_path,'extra_test_scenes'); %Bonus scenes
+%test_scn_path = fullfile(data_path,'extra_test_scenes'); %Bonus scenes
 label_path = fullfile(data_path,'test_scenes/ground_truth_bboxes.txt'); %the ground truth face locations in the test set
 
 %The faces are 36x36 pixels, which works fine as a template size. You could
@@ -65,20 +65,18 @@ feature_params_filter = struct('template_size', 36, 'hog_cell_size', 12);
 pos_infos = { {train_path_pos, {}},...
     {train_path_pos, {'rotate-left'}}, ...
     {train_path_pos, {'rotate-right'}},...
-    {train_path_pos_sides, {}},...
-    {train_path_pos_sides, {'flip'}},...
-    {train_path_pos_sides, {'rotate-left'}},... 
-    {train_path_pos_sides, {'flip','rotate-right'}} };
-%pos_infos = { {train_path_pos, {}} };
+    {train_path_pos, {'flip'}},...
+    {train_path_pos, {'flip', 'rotate-left'}},... 
+    {train_path_pos, {'flip','rotate-right'}} };
 
-neg_imgs = get_neg_images(non_face_scn_path, 36, 1000);
+neg_imgs = get_neg_images(non_face_scn_path, 36, 10000);
 pos_imgs = cell(0);
 
 for i = 1:length(pos_infos)
-    pos_imgs = [pos_imgs ; get_pos_images(pos_infos{i}{1}, 36, 1000, pos_infos{i}{2})];
+    pos_imgs = [pos_imgs ; get_pos_images(pos_infos{i}{1}, 36, -1, pos_infos{i}{2})];
 end
 
-feature_tree = build_feature_tree(pos_imgs, neg_imgs, {{36 8}, {6 1}});
+feature_tree = build_feature_tree(pos_imgs, neg_imgs, {{6 1}});
     
 %% step 2. Train Classifiers
 
@@ -145,7 +143,7 @@ end
 % They will be interpreted in Step 6 to evaluate and visualize your
 % results. See run_detector.m for more details.
 [bboxes, confidences, image_ids] = run_detector(test_scn_path, classifier_tree, 36,...
-    'step', 3, 'scales', [0.05, 0.1, 0.3, 0.5, 0.9, 1.2]);
+    'step', 3, 'scales', [15, 10, 7.5, 6, 4, 3, 2, 1]);
 
 % run_detector will have (at least) two parameters which can heavily
 % influence performance -- how much to rescale each step of your multiscale
@@ -161,9 +159,9 @@ end
 % for testing on extra images (it is commented out below).
 
 % Don't modify anything in 'evaluate_detections'!
+
 [gt_ids, gt_bboxes, gt_isclaimed, tp, fp, duplicate_detections] = ...
     evaluate_detections(bboxes, confidences, image_ids, label_path);
-
 visualize_detections_by_image(bboxes, confidences, image_ids, tp, fp, test_scn_path, label_path)
 % visualize_detections_by_image_no_gt(bboxes, confidences, image_ids, test_scn_path)
 
